@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Regression Lab</title>
+  <meta name="description" content="Multiple linear regression & feature selection explorer — 50 Startups, Boston Housing, or any CSV URL. Everything is computed in your browser." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M7 24 L25 9' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='10' cy='17' r='2.4' fill='white'/%3E%3Ccircle cx='17' cy='19' r='2.4' fill='white'/%3E%3Ccircle cx='21' cy='10' r='2.4' fill='white'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+  <script src="js/stats.js" defer></script>
+  <script src="js/data.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"></span>
+        <div>
+          <h1>Regression Lab</h1>
+          <p class="muted small">Multiple Linear Regression · 特徵選擇 · CRISP-DM</p>
+        </div>
+      </div>
+      <button id="themeToggle" class="btn ghost icon" type="button" aria-label="切換深色 / 淺色模式" title="切換主題">◐</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- ======================= Dataset source ======================= -->
+    <section class="card source" aria-labelledby="src-h">
+      <h2 id="src-h" class="visually-hidden">資料集</h2>
+      <div class="source-grid">
+        <label class="field">
+          <span class="label">Problem / 資料集</span>
+          <select id="presetSelect">
+            <option value="startups">Kaggle · 50 Startups（預測 Profit）</option>
+            <option value="boston">Boston Housing（預測 medv 房價）</option>
+            <option value="custom">自訂 CSV URL…</option>
+          </select>
+        </label>
+        <label class="field grow">
+          <span class="label">Dataset URL（可任意輸入 CSV 網址）</span>
+          <input id="urlInput" type="url" inputmode="url" spellcheck="false" placeholder="https://raw.githubusercontent.com/…/data.csv" />
+        </label>
+        <div class="field actions">
+          <span class="label">&nbsp;</span>
+          <div class="row">
+            <button id="loadBtn" class="btn primary" type="button">載入並分析</button>
+            <label class="btn ghost file-btn" title="或上傳本機 CSV">
+              上傳 CSV<input id="fileInput" type="file" accept=".csv,text/csv,text/plain" hidden />
+            </label>
+          </div>
+        </div>
+      </div>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <div id="content" hidden>
+      <!-- ======================= 1. Business understanding ======================= -->
+      <section class="card" aria-labelledby="s1">
+        <div class="step-head"><span class="step">1</span><h2 id="s1">Business Understanding</h2></div>
+        <p id="problemText"></p>
+      </section>
+
+      <!-- ======================= 2. Data understanding ======================= -->
+      <section class="card" aria-labelledby="s2">
+        <div class="step-head"><span class="step">2</span><h2 id="s2">Data Understanding</h2></div>
+        <div id="dataTiles" class="tiles"></div>
+        <h3>資料預覽（前 8 列）</h3>
+        <div class="table-wrap"><table id="previewTable" class="tbl"></table></div>
+        <div class="two-col">
+          <div>
+            <h3>敘述統計</h3>
+            <div class="table-wrap"><table id="describeTable" class="tbl num"></table></div>
+          </div>
+          <div>
+            <h3>與目標變數的相關係數 <span class="muted small">(Pearson r)</span></h3>
+            <div class="chart-box" id="corrBox"><canvas id="corrChart" aria-label="各特徵與目標變數的相關係數長條圖"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= 3. Data preparation ======================= -->
+      <section class="card" aria-labelledby="s3">
+        <div class="step-head"><span class="step">3</span><h2 id="s3">Data Preparation</h2></div>
+        <div class="prep-grid">
+          <label class="field">
+            <span class="label">目標變數 (y)</span>
+            <select id="targetSelect"></select>
+          </label>
+          <label class="field">
+            <span class="label">Test size：<b id="testRatioVal">20%</b></span>
+            <input id="testRatio" type="range" min="10" max="40" step="5" value="20" />
+          </label>
+          <label class="field">
+            <span class="label">Random seed</span>
+            <input id="seedInput" type="number" value="42" min="0" step="1" />
+          </label>
+          <label class="field">
+            <span class="label">CV folds</span>
+            <select id="foldsSelect"><option>3</option><option selected>5</option><option>10</option></select>
+          </label>
+        </div>
+        <fieldset class="predictors">
+          <legend class="label">預測變數 (X) — 類別欄位會自動 one-hot 編碼（drop first）</legend>
+          <div id="predictorList" class="chips"></div>
+        </fieldset>
+        <div class="row between">
+          <p id="prepSummary" class="muted small"></p>
+          <button id="runBtn" class="btn primary" type="button">重新訓練</button>
+        </div>
+      </section>
+
+      <!-- ======================= 4. Modeling ======================= -->
+      <section class="card" aria-labelledby="s4">
+        <div class="step-head"><span class="step">4</span><h2 id="s4">Modeling — 特徵選擇比較</h2></div>
+        <p class="muted small">5 種演算法都只在訓練集上挑選特徵，對每個 k = 1…p 各自擬合 OLS，再於測試集上評估。</p>
+        <div class="controls-row">
+          <label class="field">
+            <span class="label">Feature selection algorithm</span>
+            <select id="algoSelect"></select>
+          </label>
+          <label class="field grow">
+            <span class="label">特徵數 k = <b id="kVal">1</b> <span id="kHint" class="muted small"></span></span>
+            <input id="kSlider" type="range" min="1" max="1" step="1" value="1" />
+          </label>
+        </div>
+        <div class="two-col">
+          <figure class="chart-fig">
+            <figcaption>Test RMSE vs. 特徵數 k <span class="muted small">（越低越好）</span></figcaption>
+            <div class="chart-box"><canvas id="rmseChart" aria-label="各演算法在不同 k 的測試 RMSE"></canvas></div>
+          </figure>
+          <figure class="chart-fig">
+            <figcaption>Test R² vs. 特徵數 k <span class="muted small">（越高越好）</span></figcaption>
+            <div class="chart-box"><canvas id="r2Chart" aria-label="各演算法在不同 k 的測試 R 平方"></canvas></div>
+          </figure>
+        </div>
+        <h3>Test RMSE 比較表 <span class="muted small">— 每列最佳值以粗體標示，點儲存格可切換模型</span></h3>
+        <div class="table-wrap"><table id="compareTable" class="tbl num clickable"></table></div>
+      </section>
+
+      <!-- ======================= 5. Evaluation ======================= -->
+      <section class="card" aria-labelledby="s5">
+        <div class="step-head"><span class="step">5</span><h2 id="s5">Evaluation — 目前選定的模型</h2></div>
+        <p id="modelLabel" class="model-label"></p>
+        <div id="metricTiles" class="tiles"></div>
+        <h3>迴歸方程式</h3>
+        <div id="equation" class="equation"></div>
+        <h3>係數表 <span class="muted small">（以訓練集擬合）</span></h3>
+        <div class="table-wrap"><table id="coefTable" class="tbl num"></table></div>
+        <p class="muted small">VIF &gt; 5 表示中度共線性、&gt; 10 表示嚴重共線性；標準化 β 讓不同尺度的特徵可以互相比較重要性。</p>
+        <div class="two-col">
+          <figure class="chart-fig">
+            <figcaption>Actual vs. Predicted</figcaption>
+            <div class="chart-box square"><canvas id="avpChart" aria-label="實際值與預測值散佈圖"></canvas></div>
+          </figure>
+          <figure class="chart-fig">
+            <figcaption>Residuals vs. Fitted</figcaption>
+            <div class="chart-box square"><canvas id="residChart" aria-label="殘差對預測值散佈圖"></canvas></div>
+          </figure>
+        </div>
+        <h3>測試集誤差最大的 10 筆</h3>
+        <div class="table-wrap"><table id="residTable" class="tbl num"></table></div>
+      </section>
+
+      <!-- ======================= 6. Deployment ======================= -->
+      <section class="card" aria-labelledby="s6">
+        <div class="step-head"><span class="step">6</span><h2 id="s6">Deployment — 即時預測</h2></div>
+        <div class="predict-grid">
+          <form id="predictForm" class="predict-form" onsubmit="return false"></form>
+          <div class="predict-out">
+            <span class="label" id="predLabel">預測值</span>
+            <div id="predValue" class="hero"></div>
+            <div id="predInterval" class="muted small"></div>
+            <h3>各項貢獻 (β × x)</h3>
+            <div id="contrib" class="contrib"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="muted small foot">
+      所有計算（OLS、t / F 檢定、VIF、Lasso 路徑、CV）都在瀏覽器內以純 JavaScript 完成，資料不會上傳。
+    </footer>
+  </main>
+</body>
+</html>

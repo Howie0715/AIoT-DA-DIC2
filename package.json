@@ -1,0 +1,11 @@
+{
+  "name": "regression-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multiple linear regression & feature-selection explorer (50 Startups, Boston Housing, any CSV URL), deployable to Vercel.",
+  "scripts": {
+    "test": "node test/run-tests.mjs",
+    "dev": "vercel dev"
+  },
+  "engines": { "node": ">=18" }
+}
